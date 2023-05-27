@@ -110,7 +110,7 @@ def get_kitty_data():
     print('\033[1;32m -- get matronId done! -- \033[0m')
     kitty_table['sireId'] = birth_inform['logs_data'].map(lambda x: int(x[2 + 64 * 3:2 + 64 * 4], base=16))
     print('\033[1;32m -- get sireId done! -- \033[0m')
-    # kitty_table['genes'] = birth_inform['logs_data'].map(_decode_genes)
+    kitty_table['genes'] = birth_inform['logs_data'].map(_decode_genes)
     print('\033[1;32m -- decode gene done! -- \033[0m')
     kitty_table['birthBlock'] = birth_inform['logs_block_number']
     kitty_table.set_index(kitty_table['kittyId'], inplace=True, drop=True)
@@ -463,8 +463,8 @@ def plot_coff(coef):
 
 
 if __name__ == '__main__':
-    get_kitty_data()
-    get_market_data()
+    # get_kitty_data()
+    # get_market_data()
     get_sale_data()
     lr()
     # plot_variables()
