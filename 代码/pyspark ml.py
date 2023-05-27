@@ -17,8 +17,22 @@ kai.extend([chr(i) for i in range(97, 121) if i != 108])
 
 
 def _decode_genes(x):
+    '''
+    将基因编码解析为kai编码
+    :param x: 64位16进制数
+    :return:
+    '''
+    # ----------------------------------------------- #
+    # step 1. 从log data中截取gene对应的部分
+    # ----------------------------------------------- #
     x = x[2 + 64 * 4:2 + 64 * 5]
+    # ----------------------------------------------- #
+    # step 2. 转换为2进制
+    # ----------------------------------------------- #
     gene_bin = ''.join(str(bin(int(i, base=16))).replace('0b', '').zfill(4) for i in x)
+    # ----------------------------------------------- #
+    # step 3. 去掉前16位，每5位一组，转换为kai编码
+    # ----------------------------------------------- #
     genes = ''
     for i in range(16, len(gene_bin), 5):
         genes += kai[int(gene_bin[i:i + 5], base=2)]
@@ -26,16 +40,22 @@ def _decode_genes(x):
 
 
 def get_generation(data):
+    '''
+    递归方法获取代数（第一代、第二代）
+    :param data: kitty table
+    :return:
+    '''
     data['generation'] = None
     data['pregnant'] = ''
-    # ------------------------------------------- #
-    # 如果两方都为0的话表明是0代猫
-    # ------------------------------------------- #
-    print('1888554' in data.index)
-    print(1888554 in data.index)
+    # ----------------------------------------------- #
+    # step 1. 初代猫的父母地址为0，将初代猫设置为0代
+    # ----------------------------------------------- #
     for kittyId in data.index:
         if not (data.loc[kittyId, 'matronId'] or data.loc[kittyId, 'sireId']):
             data.loc[kittyId, 'generation'] = 0
+    # ----------------------------------------------- #
+    # step 2. 递归方法获取代数
+    # ----------------------------------------------- #
     for kittyId in tqdm(data.index):
         matronId = data.loc[kittyId, 'matronId']
         data.loc[matronId, 'pregnant'] += ' ' + str(data.loc[kittyId, 'birthBlock'])
@@ -45,31 +65,32 @@ def get_generation(data):
 
 
 def _get_generation(kittyId, data):
-    # ------------------------------------------- #
-    # 取出父母ID，和父母 generation
-    # ------------------------------------------- #
+    '''
+    递归，如果当前的父母generation为None，则先填写父母的generation
+    :param kittyId: 当前猫的Id
+    :param data: 当前状态的kitty table
+    :return:
+    '''
     matronId = data.loc[kittyId, 'matronId']
     sireId = data.loc[kittyId, 'matronId']
     matronGeneration = data.loc[matronId, 'generation']
     sireGeneration = data.loc[sireId, 'generation']
-    # ------------------------------------------- #
-    # 如果有一方是None的话，递归寻找
-    # ------------------------------------------- #
     if matronGeneration is None:
         data = _get_generation(matronId, data)
         print(data.loc[matronId, 'generation'])
     if sireGeneration is None:
         data = _get_generation(sireId, data)
         print(data.loc[matronId, 'generation'])
-    # ------------------------------------------- #
-    # 否则返回最大generation + 1
-    # ------------------------------------------- #
     data.loc[kittyId, 'generation'] = max(matronGeneration, sireGeneration) + 1
 
     return data
 
 
 def get_kitty_data():
+    '''
+    整合猫的信息
+    :return: kitty table
+    '''
     pd.options.display.max_columns = None
     log = pd.read_csv('../data/log.csv')
     print('\033[1;32m -- log data loaded-- \033[0m')
@@ -102,6 +123,10 @@ def get_kitty_data():
 
 
 def get_market_data():
+    '''
+    获取市场数据，包括各种函数的调用频次
+    :return:
+    '''
     core = pd.read_csv('../data/Core.csv')
     data = pd.DataFrame()
     for i in ['0x3d7d3f5a', '0x4ad8c938', '0x88c2a0bf', '0xf7d8c883', '0xed60ade6']:
@@ -122,6 +147,10 @@ def get_market_data():
 
 
 def load_data():
+    '''
+    加载数据 包括 Core SaleAuction price market kitty_table
+    :return:
+    '''
     core = pd.read_csv('../data/Core.csv')
     core = core.loc[core['transactions_day'].str.startswith(('2017', '2018'))]
     print('\033[1;32m -- core data loaded -- \033[0m')
@@ -143,6 +172,13 @@ def load_data():
 
 
 def find_createSale(bid_inform, createSale, kitty_data):
+    '''
+    通过bid信息查询对应的createSaleAcution信息
+    :param bid_inform: bid信息
+    :param createSale: 所有create Sale Auction的表
+    :param kitty_data: 猫的表，为了判断这只猫是不是初代猫
+    :return:
+    '''
     # method = '0x3d7d3f5a'
     # hex_kittyId = bid_inform['transactions_input'][10: 10 + 64]
     # candidates = createSale.loc[createSale['transactions_input'].str.startswith(method + hex_kittyId)]
@@ -173,6 +209,12 @@ def find_createSale(bid_inform, createSale, kitty_data):
 
 
 def count_pregnant(bid_inform, kitty_data):
+    '''
+    统计bid之前的生育次数
+    :param bid_inform: 拍卖信息（主要获取拍卖区块）
+    :param kitty_data: 猫的表（主要获取pregnant列表）
+    :return:
+    '''
     bid_num = bid_inform['transactions_block_number']
     if pd.isna(kitty_data['pregnant']):
         return 0
@@ -183,6 +225,10 @@ def count_pregnant(bid_inform, kitty_data):
 
 
 def get_sale_data():
+    '''
+    数据整合，获得所有拍卖成功的销售数据
+    :return:
+    '''
     core, saleauction, kitty, price, market = load_data()
     sale_data = saleauction.loc[saleauction['transactions_input'].str.startswith('0x454a2ab3')]
     sale_data = sale_data[['transactions_hash',
@@ -232,6 +278,7 @@ def get_sale_data():
     sale_data['start_price'] = sale_data['createSaleInput'].map(lambda x: int(x[10 + 64:10 + 64 * 2], base=16))
     sale_data['end_price'] = sale_data['createSaleInput'].map(lambda x: int(x[10 + 64 * 2:10 + 64 * 3], base=16))
 
+    # 将基因转换为类别变量，两种转换方法：1. 只转换显性形状 2. 转换全部基因
     # for i in range(12):
     #     sale_data['gene{}'.format(i + 1)] = sale_data['genes'].map(lambda x: x[i * 4 + 3])
 
@@ -243,8 +290,16 @@ def get_sale_data():
 
 
 def lr():
+    '''
+    LinearRegression
+    预测猫的拍卖价格
+    :return:
+    '''
     spark = SparkSession.builder.appName('lin_reg').getOrCreate()
     data = spark.read.csv('../data/sale_data.csv', inferSchema=True, header=True)
+    # ----------------------------------------------------------- #
+    # step 1. 去除无关变量
+    # ----------------------------------------------------------- #
     data = data.drop('transactions_hash', 'transactions_block_number', 'transactions_transaction_index',
                      'transactions_input', 'transactions_day', 'createSaleInput', 'genes',
                      'start_price', 'end_price')  # 'kittyId'
@@ -255,6 +310,9 @@ def lr():
     #     data = stingIndexder.fit(data).transform(data).drop('gene{}'.format(i + 1))
     #     onehotencoder = OneHotEncoder(inputCol='gene_{}'.format(i + 1), outputCol='gene{}'.format(i + 1))
     #     data = onehotencoder.fit(data).transform(data).drop('gene_{}'.format(i + 1))
+    # ----------------------------------------------------------- #
+    # step 2. 将类别变量转换为独热编码
+    # ----------------------------------------------------------- #
     for i in range(48):
         stingIndexder = StringIndexer(inputCol='gene{}'.format(i + 1), outputCol='gene_{}'.format(i + 1))
         data = stingIndexder.fit(data).transform(data).drop('gene{}'.format(i + 1))
@@ -263,16 +321,22 @@ def lr():
 
     onehotencoder = OneHotEncoder(inputCol='generation', outputCol='generation_onehot')
     data = onehotencoder.fit(data).transform(data).drop('generation')
-
+    # ----------------------------------------------------------- #
+    # step 3. 生成bid price， 删除transactoins value
+    # ----------------------------------------------------------- #
     data = data.withColumn('bid_price', log(col('transactions_value') * col('eth_price') * 10 ** -18 + 1)).drop(
         'transactions_value')
-
+    # ----------------------------------------------------------- #
+    # step 4. 对数处理
+    # ----------------------------------------------------------- #
     for col_name in ['duration', 'transactions_gas_price', 'pregnant_count',
                      'eth_price', '0x3d7d3f5a', '0x4ad8c938', '0x88c2a0bf',
                      '0xf7d8c883', '0xed60ade6', '0x454a2ab3'
                      ]:
         data = data.withColumn('log {}'.format(col_name), log(col(col_name) + 1)).drop(col_name)
-
+    # ----------------------------------------------------------- #
+    # step 5. 添加时间的高阶项
+    # ----------------------------------------------------------- #
     data = data.withColumn('transactions_block_timestamp2', pow(data['transactions_block_timestamp'], 2))
     data = data.withColumn('transactions_block_timestamp3', pow(data['transactions_block_timestamp'], 3))
     # data = data.withColumn('log start_price', log(col('start_price') + 1)).drop('start_price')
@@ -280,7 +344,9 @@ def lr():
 
     data.printSchema()
     data.show(5, False)
-
+    # ----------------------------------------------------------- #
+    # step 6. 转换为向量
+    # ----------------------------------------------------------- #
     assembler = VectorAssembler(inputCols=[i for i in data.columns if i != 'bid_price'], outputCol="features")
     data = assembler.transform(data)
     data = data.select('features', 'bid_price')
@@ -291,14 +357,26 @@ def lr():
     # scaler = StandardScaler(inputCol='features', outputCol='scaledFeatures', withStd=True, withMean=True)
     # data = scaler.fit(data).transform(data)
     # lin_Reg = LinearRegression(labelCol='bid_price', featuresCol='scaledFeatures')
-
+    # ----------------------------------------------------------- #
+    # step 7. 线性回归
+    # ----------------------------------------------------------- #
     lin_Reg = LinearRegression(labelCol='bid_price', featuresCol='features', solver="normal")
     lr_model = lin_Reg.fit(data)
+    # ----------------------------------------------------------- #
+    # step 8. 输出结果
+    # ----------------------------------------------------------- #
     print(lr_model.intercept)
     print(lr_model.coefficients)
+    # ----------------------------------------------------------- #
+    # step 9. 模型评估
+    # ----------------------------------------------------------- #
     training_predictions = lr_model.evaluate(data)
+
     print(f'MSE:{training_predictions.meanSquaredError}')
     print(f'r2:{training_predictions.r2}')
+    # ----------------------------------------------------------- #
+    # step 10. 参数绘图
+    # ----------------------------------------------------------- #
     plot_coff(coef=lr_model.coefficients)
     # summary = lr_model.summary
     # print(summary.pValues)
@@ -320,6 +398,10 @@ def _plot(data, x):
 
 
 def plot_variables():
+    '''
+    查看各个变量的分布情况
+    :return:
+    '''
     data = pd.read_csv('../data/sale_data.csv')
     data = data.drop(['transactions_hash', 'transactions_block_number', 'transactions_transaction_index',
                       'transactions_input', 'transactions_day', 'createSaleInput', 'genes'], axis=1)
@@ -345,6 +427,11 @@ def plot_variables():
 
 
 def plot_coff(coef):
+    '''
+    以热力图的形式展现模型参数
+    :param coef: 模型参数
+    :return:
+    '''
     import numpy as np
     gene_nums = [27, 30, 31, 31, 24, 23, 25, 27, 29, 30,
                  31, 31, 30, 31, 31, 31, 30, 31, 31, 31,
